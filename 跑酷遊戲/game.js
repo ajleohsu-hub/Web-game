@@ -1,309 +1,10 @@
-<!doctype html>
-<html lang="zh-Hant">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>NEON RUN // 跑酷協議</title>
-    <style>
-      :root {
-        color-scheme: dark;
-        --cyan: #46f6ff;
-        --pink: #ff3c93;
-        --ink: #07101e;
-        --panel: rgba(7, 16, 30, 0.76);
-      }
-      * {
-        box-sizing: border-box;
-      }
-      body {
-        margin: 0;
-        min-height: 100vh;
-        overflow: hidden;
-        background: #020711;
-        color: #e9fbff;
-        font-family:
-          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      }
-      canvas {
-        width: 100vw;
-        height: 100vh;
-        display: block;
-      }
-      .hud {
-        position: fixed;
-        inset: 0;
-        pointer-events: none;
-        padding: 22px clamp(18px, 4vw, 56px);
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        text-shadow: 0 2px 10px #000;
-      }
-      .brand {
-        font-weight: 900;
-        letter-spacing: 0.17em;
-        color: var(--cyan);
-        font-size: clamp(13px, 1.5vw, 18px);
-      }
-      .sub {
-        opacity: 0.65;
-        font-size: 10px;
-        letter-spacing: 0.14em;
-        margin-top: 6px;
-      }
-      .statbox {
-        text-align: right;
-        display: grid;
-        gap: 5px;
-      }
-      .stat {
-        font-size: 12px;
-        letter-spacing: 0.12em;
-        color: #a5c2d3;
-      }
-      .stat b {
-        color: #fff;
-        font-size: 18px;
-      }
-      .combo {
-        position: fixed;
-        left: 50%;
-        transform: translateX(-50%);
-        top: 25px;
-        text-align: center;
-        pointer-events: none;
-      }
-      .combo strong {
-        display: block;
-        color: var(--pink);
-        font-size: clamp(22px, 4vw, 42px);
-        font-style: italic;
-      }
-      .combo small {
-        color: #fff;
-        letter-spacing: 0.16em;
-        font-size: 10px;
-      }
-      .level-notice {
-        position: fixed;
-        top: 42%;
-        left: 50%;
-        z-index: 2;
-        transform: translate(-50%, -50%) scale(0.9);
-        color: var(--cyan);
-        font-size: clamp(34px, 7vw, 84px);
-        font-weight: 900;
-        font-style: italic;
-        letter-spacing: -0.07em;
-        opacity: 0;
-        pointer-events: none;
-        text-shadow: 0 0 26px #46f6ff88;
-        transition: opacity 0.2s, transform 0.2s;
-      }
-      .level-notice.show {
-        opacity: 1;
-        transform: translate(-50%, -50%) scale(1);
-      }
-      .meter {
-        position: fixed;
-        bottom: 30px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: min(330px, 70vw);
-        pointer-events: none;
-      }
-      .meterlabel {
-        display: flex;
-        justify-content: space-between;
-        font-size: 10px;
-        letter-spacing: 0.12em;
-        color: #afc1cf;
-        margin-bottom: 7px;
-      }
-      .track {
-        height: 7px;
-        border: 1px solid #25445c;
-        background: #07101e;
-        transform: skewX(-18deg);
-      }
-      .fill {
-        height: 100%;
-        width: 100%;
-        background: linear-gradient(90deg, var(--cyan), #a6ffff);
-        box-shadow: 0 0 13px var(--cyan);
-        transition: width 0.08s;
-      }
-      .controls {
-        position: fixed;
-        left: 50%;
-        bottom: 47px;
-        transform: translateX(-50%);
-        display: flex;
-        gap: 9px;
-        pointer-events: auto;
-      }
-      button {
-        border: 1px solid #497184;
-        background: rgba(3, 14, 27, 0.78);
-        color: #dffbff;
-        font:
-          700 11px ui-monospace,
-          monospace;
-        letter-spacing: 0.1em;
-        padding: 10px 13px;
-        cursor: pointer;
-        touch-action: manipulation;
-      }
-      button:hover {
-        border-color: var(--cyan);
-        color: var(--cyan);
-      }
-      .help {
-        position: fixed;
-        bottom: 25px;
-        left: 26px;
-        font-size: 10px;
-        color: #8da8b8;
-        line-height: 1.6;
-        letter-spacing: 0.05em;
-        pointer-events: none;
-      }
-      .help kbd {
-        color: var(--cyan);
-        border: 1px solid #366477;
-        padding: 1px 4px;
-      }
-      .overlay {
-        position: fixed;
-        inset: 0;
-        display: grid;
-        place-items: center;
-        background: rgba(1, 5, 13, 0.45);
-        backdrop-filter: blur(3px);
-      }
-      .card {
-        text-align: center;
-        padding: 34px 42px;
-        border: 1px solid #416375;
-        background: var(--panel);
-        max-width: 470px;
-        box-shadow: 0 0 50px #0a6f8d33;
-      }
-      h1 {
-        font-size: clamp(32px, 6vw, 66px);
-        margin: 0;
-        font-style: italic;
-        letter-spacing: -0.08em;
-        color: #fff;
-      }
-      h1 em {
-        color: var(--cyan);
-        font-style: normal;
-      }
-      p {
-        color: #afc5d0;
-        font-size: 13px;
-        line-height: 1.8;
-        margin: 20px 0 25px;
-      }
-      .start {
-        background: var(--cyan);
-        color: #03101a;
-        border: 0;
-        padding: 14px 24px;
-        font-size: 12px;
-      }
-      .start:hover {
-        color: #03101a;
-        background: #d5ffff;
-      }
-      .name-input {
-        width: 100%;
-        margin: 0 0 12px;
-        padding: 12px;
-        border: 1px solid #497184;
-        background: #05101d;
-        color: #e9fbff;
-        font: 700 14px ui-monospace, monospace;
-        text-align: center;
-      }
-      .leaderboard {
-        max-height: 170px;
-        overflow: auto;
-        margin: 16px 0 22px;
-        border-top: 1px solid #29475d;
-        text-align: left;
-      }
-      .leaderboard div {
-        display: flex;
-        justify-content: space-between;
-        gap: 24px;
-        padding: 7px 3px;
-        border-bottom: 1px solid #183246;
-        color: #d5faff;
-        font-size: 12px;
-      }
-      @media (pointer: coarse) {
-        .help {
-          display: none;
-        }
-        .controls {
-          bottom: 24px;
-        }
-        .meter {
-          bottom: 80px;
-        }
-        button {
-          padding: 14px 18px;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <canvas id="game"></canvas>
-    <div class="hud">
-      <div>
-        <div class="brand" id="brand">LEVEL 1 // NEON RUN</div>
-        <div class="sub" id="status">ROOFTOP CIRCUIT</div>
-      </div>
-      <div class="statbox">
-        <div class="stat">DISTANCE <b id="distance">0000</b> M</div>
-        <div class="stat">BEST <b id="best">0000</b> M</div>
-      </div>
-    </div>
-    <div class="combo">
-      <strong id="combo"></strong><small id="comboHint"></small>
-    </div>
-    <div class="level-notice" id="levelNotice"></div>
-    <div class="meter">
-      <div class="meterlabel">
-        <span>FLOW ENERGY</span><span id="energyText">100%</span>
-      </div>
-      <div class="track"><div class="fill" id="energy"></div></div>
-    </div>
-    <div class="help">
-      <kbd>SPACE</kbd> 跳躍 / 二段跳　 <kbd>SHIFT</kbd> 衝刺　
-      <kbd>S</kbd> 滑鏟<br />在牆邊跳躍可牆跑；收集能量維持 FLOW。
-    </div>
-    <div class="controls">
-      <button id="jump">JUMP</button><button id="dash">DASH</button
-      ><button id="slide">SLIDE</button>
-    </div>
-    <div class="overlay" id="overlay">
-      <div class="card">
-        <h1>NEON <em>RUN</em></h1>
-        <p>
-          不是跑得最快，而是每一秒都做對選擇。<br />安全路線能活下來；危險高台能維持
-          <b>FLOW</b>、拿到更高分。
-        </p>
-        <button class="start" id="start">開始滲透　↗</button>
-      </div>
-    </div>
-    <script>
       (() => {
         const canvas = document.querySelector("#game"),
           ctx = canvas.getContext("2d");
         const el = (id) => document.getElementById(id);
+        const backgroundImage = new Image();
+        backgroundImage.src =
+          "https://i.ibb.co/67ThWfM3/a-wide-seamless-panoramic-ultra-wide-sky-and.png";
         let W,
           H,
           DPR,
@@ -331,14 +32,16 @@
           energy: 100,
           combo: 0,
           comboTimer: 0,
+          flight: 0,
           dead: 0,
         };
         let platforms = [],
           hazards = [],
           orbs = [],
           particles = [],
-          spawnX = 0,
-          skyline = [];
+          spawnX = 0;
+        const heldKeys = new Set();
+        let flightReady = true;
         function resize() {
           DPR = Math.min(devicePixelRatio, 2);
           W = innerWidth;
@@ -376,9 +79,9 @@
             energy: 100,
             combo: 0,
             comboTimer: 0,
+            flight: 0,
             dead: 0,
           });
-          buildSkyline();
           beginRestPlatform(false, true);
           while (spawnX < W + 350) spawn();
           updateHud();
@@ -476,15 +179,6 @@
             el("saveScore").onclick = restart;
           };
         }
-        function buildSkyline() {
-          skyline = [];
-          let x = 0;
-          while (x < W + 100) {
-            let h = 70 + Math.random() * 210;
-            skyline.push({ x, w: 35 + Math.random() * 90, h });
-            x += skyline.at(-1).w + 5;
-          }
-        }
         function spawn() {
           const gap = spawnX ? 85 + Math.random() * 75 : 0;
           const prev = platforms.at(-1);
@@ -551,7 +245,18 @@
           }
           if (type === "slide" && p.onGround) p.slide = 0.42;
         }
+        function flyToTop() {
+          if (!running || p.dead || !flightReady) return;
+          flightReady = false;
+          p.flight = 0.8;
+          p.onGround = false;
+          p.vy = -920;
+          el("status").textContent = "CHEAT ACTIVATED · SKY LIFT";
+          burst(p.x + p.w / 2, p.y + p.h / 2, "#ffd166", 28);
+        }
         addEventListener("keydown", (e) => {
+          heldKeys.add(e.code);
+          if (heldKeys.has("KeyA") && heldKeys.has("KeyL")) flyToTop();
           if (["Space", "ArrowUp", "KeyW"].includes(e.code)) {
             e.preventDefault();
             action("jump");
@@ -560,6 +265,10 @@
             action("dash");
           if (["KeyS", "ArrowDown"].includes(e.code)) action("slide");
           if (e.code === "KeyR" && p.dead && !won) restart();
+        });
+        addEventListener("keyup", (e) => {
+          heldKeys.delete(e.code);
+          if (!heldKeys.has("KeyA") || !heldKeys.has("KeyL")) flightReady = true;
         });
         [
           ["jump", "jump"],
@@ -612,8 +321,17 @@
           levelNoticeTimer = Math.max(0, levelNoticeTimer - dt);
           if (!levelNoticeTimer) el("levelNotice").classList.remove("show");
           speed = Math.min(650, speed + dt * 2.7);
-          p.vy += 1450 * dt;
+          if (p.flight > 0) {
+            p.flight = Math.max(0, p.flight - dt);
+            p.vy = -920;
+          } else {
+            p.vy += 1450 * dt;
+          }
           p.y += p.vy * dt;
+          if (p.y < 22) {
+            p.y = 22;
+            if (p.flight > 0) p.vy = 0;
+          }
           p.onGround = false;
           p.wall = 0;
           p.slide = Math.max(0, p.slide - dt);
@@ -708,22 +426,28 @@
         }
         function draw() {
           ctx.clearRect(0, 0, W, H);
-          let g = ctx.createLinearGradient(0, 0, 0, H);
-          g.addColorStop(0, "#071d36");
-          g.addColorStop(0.62, "#081126");
-          g.addColorStop(1, "#020611");
-          ctx.fillStyle = g;
-          ctx.fillRect(0, 0, W, H);
-          ctx.globalAlpha = 0.32;
-          ctx.fillStyle = "#12365c";
-          for (const b of skyline) {
-            ctx.fillRect(b.x, b.y ? 0 : H - b.h, b.w, b.h);
-            ctx.fillStyle = "#46f6ff";
-            for (let yy = H - b.h + 16; yy < H - 8; yy += 22)
-              if ((yy + b.x) % 3 < 1) ctx.fillRect(b.x + 9, yy, 5, 2);
-            ctx.fillStyle = "#12365c";
+          if (backgroundImage.complete && backgroundImage.naturalWidth) {
+            const scale =
+              Math.max(
+                W / backgroundImage.naturalWidth,
+                H / backgroundImage.naturalHeight,
+              ) * 1.45;
+            const imageW = backgroundImage.naturalWidth * scale;
+            const imageH = backgroundImage.naturalHeight * scale;
+            // One oversized image: horizontal camera pan only, never tiled.
+            const imageY = (H - imageH) / 2;
+            const maxPan = imageW - W;
+            const imageX = -Math.min(distance * 0.32, maxPan);
+            ctx.drawImage(backgroundImage, imageX, imageY, imageW, imageH);
+            ctx.fillStyle = "rgba(2, 7, 17, 0.16)";
+          } else {
+            const g = ctx.createLinearGradient(0, 0, 0, H);
+            g.addColorStop(0, "#071d36");
+            g.addColorStop(0.62, "#081126");
+            g.addColorStop(1, "#020611");
+            ctx.fillStyle = g;
           }
-          ctx.globalAlpha = 1;
+          ctx.fillRect(0, 0, W, H);
           ctx.strokeStyle = "#15344e";
           ctx.lineWidth = 1;
           for (let y = H * 0.73; y < H; y += 32) {
@@ -838,6 +562,3 @@
         reset();
         draw();
       })();
-    </script>
-  </body>
-</html>
