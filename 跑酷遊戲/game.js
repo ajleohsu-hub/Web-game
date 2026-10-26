@@ -5,6 +5,13 @@
         const backgroundImage = new Image();
         backgroundImage.src =
           "https://i.ibb.co/67ThWfM3/a-wide-seamless-panoramic-ultra-wide-sky-and.png";
+        const hazardImage = new Image();
+        hazardImage.src = "hazard-spike-transparent.png";
+        const platformImage = new Image();
+        platformImage.src = "platform-transparent.png";
+        // New keys start the infinite-mode high-score table from zero.
+        const BEST_SCORE_KEY = "neonRunInfiniteBestV5";
+        const LEADERBOARD_KEY = "neonRunInfiniteLeaderboardV5";
         let W,
           H,
           DPR,
@@ -12,11 +19,11 @@
           last = 0,
           time = 0,
           distance = 0,
-          best = Math.min(10000, +localStorage.neonRunBest || 0),
+          best = +localStorage.getItem(BEST_SCORE_KEY) || 0,
+          bestName = loadLeaderboard()[0]?.name || "—",
           speed = 330;
         let level = 1,
           nextCheckpoint = 1000,
-          won = false,
           levelNoticeTimer = 0;
         const p = {
           x: 150,
@@ -26,13 +33,11 @@
           vy: 0,
           onGround: true,
           jumps: 0,
-          slide: 0,
           dash: 0,
           wall: 0,
           energy: 100,
           combo: 0,
           comboTimer: 0,
-          flight: 0,
           dead: 0,
         };
         let platforms = [],
@@ -41,7 +46,7 @@
           particles = [],
           spawnX = 0;
         const heldKeys = new Set();
-        let flightReady = true;
+        let skipReady = true;
         function resize() {
           DPR = Math.min(devicePixelRatio, 2);
           W = innerWidth;
@@ -58,7 +63,6 @@
           time = 0;
           level = 1;
           nextCheckpoint = 1000;
-          won = false;
           levelNoticeTimer = 0;
           el("brand").textContent = "LEVEL 1 // NEON RUN";
           el("status").textContent = "ROOFTOP CIRCUIT";
@@ -73,13 +77,11 @@
             vy: 0,
             onGround: true,
             jumps: 0,
-            slide: 0,
             dash: 0,
             wall: 0,
             energy: 100,
             combo: 0,
             comboTimer: 0,
-            flight: 0,
             dead: 0,
           });
           beginRestPlatform(false, true);
@@ -130,7 +132,7 @@
         }
         function loadLeaderboard() {
           try {
-            const saved = JSON.parse(localStorage.neonRunLeaderboard || "[]");
+            const saved = JSON.parse(localStorage.getItem(LEADERBOARD_KEY) || "[]");
             return Array.isArray(saved) ? saved : [];
           } catch {
             return [];
@@ -151,18 +153,16 @@
             )
             .join("");
         }
-        function win() {
-          if (won) return;
-          won = true;
-          p.dead = 1;
+        function showNewRecord(score) {
           running = false;
-          distance = 10000;
-          best = 10000;
-          localStorage.neonRunBest = best;
-          el("status").textContent = "MISSION COMPLETE · 10000M";
-          el("brand").textContent = "NEON RUN // COMPLETE";
+          best = score;
+          localStorage.setItem(BEST_SCORE_KEY, best);
+          el("status").textContent = "NEW HIGH SCORE · " + score + "M";
+          el("brand").textContent = "NEON RUN // NEW RECORD";
           el("overlay").innerHTML =
-            '<div class="card"><h1>MISSION <em>COMPLETE</em></h1><p>你已穿越全部 10 個區域。<br />最終距離：<b>10000 M</b></p><input class="name-input" id="playerName" maxlength="18" placeholder="輸入你的名稱" autocomplete="off" /><button class="start" id="saveScore">儲存紀錄　↗</button><div class="leaderboard" id="leaderboard"></div></div>';
+            '<div class="card"><h1>NEW <em>RECORD</em></h1><p>你打破了最高紀錄！<br />最終距離：<b>' +
+            score +
+            ' M</b></p><input class="name-input" id="playerName" maxlength="18" placeholder="輸入你的名稱" autocomplete="off" /><button class="start" id="saveScore">儲存紀錄　↗</button><div class="leaderboard" id="leaderboard"></div></div>';
           const leaderboard = el("leaderboard");
           leaderboard.innerHTML = leaderboardHtml(loadLeaderboard());
           el("overlay").style.display = "grid";
@@ -170,9 +170,11 @@
             const input = el("playerName");
             const name = input.value.trim().slice(0, 18) || "ANONYMOUS";
             const entries = loadLeaderboard();
-            entries.push({ name, score: 10000, createdAt: Date.now() });
+            entries.push({ name, score, createdAt: Date.now() });
             entries.sort((a, b) => b.score - a.score || a.createdAt - b.createdAt);
-            localStorage.neonRunLeaderboard = JSON.stringify(entries.slice(0, 30));
+            localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(entries.slice(0, 30)));
+            bestName = entries[0].name;
+            updateHud();
             leaderboard.innerHTML = leaderboardHtml(entries.slice(0, 30));
             input.remove();
             el("saveScore").textContent = "再跑一次　↻";
@@ -189,18 +191,8 @@
           const w = 180 + Math.random() * 190;
           const x = spawnX + gap;
           platforms.push({ x, y, w, h: 24, risk: y < H * 0.6 });
-          if (Math.random() < 0.64 && x > 400) {
-            if (Math.random() < 0.45)
-              hazards.push({ x: x + w * 0.55, y: y - 24, w: 22, h: 24 });
-            else
-              hazards.push({
-                x: x + w * 0.48,
-                y: y - 16,
-                w: 48,
-                h: 16,
-                low: true,
-              });
-          }
+          if (Math.random() < 0.64 && x > 400)
+            hazards.push({ x: x + w * 0.55, y: y - 30, w: 34, h: 30 });
           if (y < H * 0.6 || Math.random() < 0.22)
             orbs.push({ x: x + w * 0.7, y: y - 55, r: 9, taken: false });
           spawnX = x + w;
@@ -243,37 +235,55 @@
             p.energy -= 17;
             burst(p.x + p.w, p.y + p.h / 2, "#ff3c93", 15);
           }
-          if (type === "slide" && p.onGround) p.slide = 0.42;
         }
-        function flyToTop() {
-          if (!running || p.dead || !flightReady) return;
-          flightReady = false;
-          p.flight = 0.8;
+        function checkCheckpoint() {
+          while (distance >= nextCheckpoint) {
+            level++;
+            nextCheckpoint += 1000;
+            beginRestPlatform();
+          }
+          return false;
+        }
+        function skipAhead() {
+          if (!running || p.dead || !skipReady) return;
+          skipReady = false;
+          const skipDistance = 500;
+          const worldShift = skipDistance * 10;
+          distance += skipDistance;
+          platforms.forEach((q) => (q.x -= worldShift));
+          hazards.forEach((q) => (q.x -= worldShift));
+          orbs.forEach((q) => (q.x -= worldShift));
+          spawnX -= worldShift;
+          platforms = platforms.filter((q) => q.x + q.w > -100);
+          hazards = hazards.filter((q) => q.x + q.w > -100);
+          orbs = orbs.filter((q) => q.x > -50);
+          while (spawnX < W + 350) spawn();
+          p.y = 18;
           p.onGround = false;
-          p.vy = -920;
-          el("status").textContent = "CHEAT ACTIVATED · SKY LIFT";
+          p.vy = 0;
+          p.jumps = 2;
+          el("status").textContent = "CHEAT ACTIVATED · +500M SKY DROP";
           burst(p.x + p.w / 2, p.y + p.h / 2, "#ffd166", 28);
+          checkCheckpoint();
         }
         addEventListener("keydown", (e) => {
           heldKeys.add(e.code);
-          if (heldKeys.has("KeyA") && heldKeys.has("KeyL")) flyToTop();
+          if (heldKeys.has("KeyA") && heldKeys.has("KeyL")) skipAhead();
           if (["Space", "ArrowUp", "KeyW"].includes(e.code)) {
             e.preventDefault();
             action("jump");
           }
           if (["ShiftLeft", "ShiftRight", "KeyD"].includes(e.code))
             action("dash");
-          if (["KeyS", "ArrowDown"].includes(e.code)) action("slide");
-          if (e.code === "KeyR" && p.dead && !won) restart();
+          if (e.code === "KeyR" && p.dead) restart();
         });
         addEventListener("keyup", (e) => {
           heldKeys.delete(e.code);
-          if (!heldKeys.has("KeyA") || !heldKeys.has("KeyL")) flightReady = true;
+          if (!heldKeys.has("KeyA") || !heldKeys.has("KeyL")) skipReady = true;
         });
         [
           ["jump", "jump"],
           ["dash", "dash"],
-          ["slide", "slide"],
         ].forEach(([id, a]) => {
           el(id).addEventListener("pointerdown", (e) => {
             e.preventDefault();
@@ -294,47 +304,34 @@
         function die() {
           if (p.dead) return;
           p.dead = 1;
-          best = Math.max(best, Math.floor(distance));
-          localStorage.neonRunBest = best;
+          const score = Math.floor(distance);
+          if (score > best) {
+            showNewRecord(score);
+            return;
+          }
           el("overlay").innerHTML =
             '<div class="card"><h1>SIGNAL <em>LOST</em></h1><p>距離 ' +
-            Math.floor(distance) +
+            score +
             " M　·　最高 " +
             best +
-            ' M<br>按下 <b>R</b> 或點擊下方再次嘗試。</p><button class="start" id="again">重新連線　↻</button></div>';
+            " M　·　紀錄者 " +
+            escapeHtml(bestName) +
+            ' <br>按下 <b>R</b> 或點擊下方再次嘗試。</p><button class="start" id="again">重新連線　↻</button></div>';
           el("overlay").style.display = "grid";
           el("again").onclick = restart;
         }
         function update(dt) {
           time += dt;
           let move = speed * (p.dash ? 1.72 : 1) * dt;
-          distance = Math.min(10000, distance + move / 10);
-          if (distance >= nextCheckpoint) {
-            if (nextCheckpoint === 10000) {
-              win();
-              return;
-            }
-            level++;
-            nextCheckpoint += 1000;
-            beginRestPlatform();
-          }
+          distance += move / 10;
+          checkCheckpoint();
           levelNoticeTimer = Math.max(0, levelNoticeTimer - dt);
           if (!levelNoticeTimer) el("levelNotice").classList.remove("show");
           speed = Math.min(650, speed + dt * 2.7);
-          if (p.flight > 0) {
-            p.flight = Math.max(0, p.flight - dt);
-            p.vy = -920;
-          } else {
-            p.vy += 1450 * dt;
-          }
+          p.vy += 1450 * dt;
           p.y += p.vy * dt;
-          if (p.y < 22) {
-            p.y = 22;
-            if (p.flight > 0) p.vy = 0;
-          }
           p.onGround = false;
           p.wall = 0;
-          p.slide = Math.max(0, p.slide - dt);
           p.dash = Math.max(0, p.dash - dt);
           p.comboTimer -= dt;
           platforms.forEach((q) => (q.x -= move));
@@ -345,8 +342,7 @@
           platforms = platforms.filter((q) => q.x + q.w > -100);
           hazards = hazards.filter((q) => q.x + q.w > -100);
           orbs = orbs.filter((q) => q.x > -50);
-          const ph = p.slide ? 24 : p.h;
-          const box = { x: p.x, y: p.y + (p.h - ph), w: p.w, h: ph };
+          const box = { x: p.x, y: p.y, w: p.w, h: p.h };
           for (const q of platforms) {
             if (
               p.vy >= 0 &&
@@ -379,7 +375,7 @@
           if (p.y > H + 100) die();
           for (const h of hazards) {
             let hb = { x: h.x, y: h.y, w: h.w, h: h.h };
-            if (rectHit(box, hb) && !(h.low && p.slide)) {
+            if (rectHit(box, hb)) {
               if (p.dash) {
                 burst(h.x, h.y, "#ff3c93", 18);
                 h.x = -999;
@@ -416,12 +412,13 @@
             "0",
           );
           el("best").textContent = String(best).padStart(4, "0");
+          el("bestName").textContent = bestName;
           el("energy").style.width = p.energy + "%";
           el("energyText").textContent = Math.ceil(p.energy) + "%";
           el("combo").textContent = p.combo > 1 ? "×" + p.combo + " FLOW" : "";
           el("comboHint").textContent = p.combo > 1 ? "高風險路線已鎖定" : "";
           const restPlatformAhead = platforms.some((q) => q.rest && !q.visited);
-          if (!levelNoticeTimer && !won && !restPlatformAhead)
+          if (!levelNoticeTimer && !restPlatformAhead)
             el("status").textContent = "ROOFTOP CIRCUIT";
         }
         function draw() {
@@ -448,45 +445,38 @@
             ctx.fillStyle = g;
           }
           ctx.fillRect(0, 0, W, H);
-          ctx.strokeStyle = "#15344e";
-          ctx.lineWidth = 1;
-          for (let y = H * 0.73; y < H; y += 32) {
-            ctx.beginPath();
-            ctx.moveTo(0, y);
-            ctx.lineTo(W, y);
-            ctx.stroke();
-          }
           for (const q of platforms) {
-            ctx.fillStyle = q.rest ? "#263e43" : q.risk ? "#26336a" : "#172b45";
-            ctx.fillRect(q.x, q.y, q.w, q.h);
-            ctx.fillStyle = q.rest ? "#ffd166" : q.risk ? "#ff3c93" : "#46f6ff";
-            ctx.fillRect(q.x, q.y, q.w, 3);
-            ctx.globalAlpha = 0.25;
-            ctx.fillRect(q.x + 5, q.y + 6, q.w - 10, 2);
-            ctx.globalAlpha = 1;
+            // Platform width can grow, but its thickness always stays the same.
+            const visualHeight = 66;
+            const visualY = q.y - visualHeight * 0.28;
+            if (platformImage.complete && platformImage.naturalWidth) {
+              ctx.drawImage(platformImage, q.x, visualY, q.w, visualHeight);
+            } else {
+              ctx.fillStyle = "#6f4929";
+              ctx.fillRect(q.x, q.y, q.w, q.h);
+              ctx.fillStyle = "#92c83d";
+              ctx.fillRect(q.x, q.y, q.w, 4);
+            }
             if (q.rest) {
-              ctx.fillStyle = "#fff1bd";
+              ctx.fillStyle = "#fffbe1";
               ctx.font = "700 10px ui-monospace, monospace";
-              ctx.fillText("REST ZONE // 100M", q.x + 22, q.y + 18);
+              ctx.fillText("REST ZONE // 100M", q.x + 22, q.y - 8);
             }
           }
           for (const h of hazards) {
-            ctx.fillStyle = "#ff3c93";
-            if (h.low) {
-              ctx.fillRect(h.x, h.y, h.w, h.h);
-              ctx.fillStyle = "#201025";
-              for (let i = 4; i < h.w; i += 12) {
-                ctx.beginPath();
-                ctx.moveTo(h.x + i, h.y);
-                ctx.lineTo(h.x + i + 5, h.y - h.h * 0.7);
-                ctx.lineTo(h.x + i + 10, h.y);
-                ctx.fill();
-              }
+            const drawWidth = 72;
+            const drawHeight = 48;
+            const drawX = h.x - (drawWidth - h.w) / 2;
+            const drawY = h.y + h.h - drawHeight + 7;
+            if (hazardImage.complete && hazardImage.naturalWidth) {
+              ctx.drawImage(hazardImage, drawX, drawY, drawWidth, drawHeight);
             } else {
+              // Simple fallback while the supplied danger image is loading.
+              ctx.fillStyle = "#000000";
               ctx.beginPath();
-              ctx.moveTo(h.x, h.y + h.h);
-              ctx.lineTo(h.x + h.w / 2, h.y);
-              ctx.lineTo(h.x + h.w, h.y + h.h);
+              ctx.moveTo(drawX, h.y + h.h);
+              ctx.lineTo(drawX + drawWidth / 2, drawY);
+              ctx.lineTo(drawX + drawWidth, h.y + h.h);
               ctx.fill();
             }
           }
@@ -506,8 +496,8 @@
             ctx.fillRect(v.x, v.y, 3, 3);
           }
           ctx.globalAlpha = 1;
-          const ph = p.slide ? 24 : p.h,
-            py = p.y + p.h - ph;
+          const ph = p.h,
+            py = p.y;
           ctx.save();
           ctx.translate(p.x + p.w / 2, py + ph / 2);
           if (p.dash) {
